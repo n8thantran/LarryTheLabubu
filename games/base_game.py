@@ -21,6 +21,7 @@ class BaseGame(QWidget, ABC, metaclass=BaseGameMeta):
         self.game_name = "Unknown Game"
         self.game_description = "A mysterious game"
         self.play_duration = 30  # Default play duration in seconds
+        self.game_result_callback = None  # Callback for when game ends
         
     @abstractmethod
     def start_game(self):
@@ -50,3 +51,24 @@ class BaseGame(QWidget, ABC, metaclass=BaseGameMeta):
         self.game_active = False
         self.game_won = False
         self.game_lost = False
+    
+    def set_result_callback(self, callback):
+        """Set the callback function to call when game ends"""
+        self.game_result_callback = callback
+    
+    def trigger_game_end_callback(self):
+        """Call the callback when game ends with result"""
+        if self.game_result_callback:
+            self.game_result_callback(self.game_won, self.game_lost, self.game_name)
+    
+    def closeEvent(self, event):
+        """Default close event handler for games - only close game window"""
+        print(f"🎮 {self.game_name} game window closing...")
+        
+        # End game properly if still active
+        if self.game_active:
+            self.end_game()
+        
+        # Accept the close event (only closes this window)
+        event.accept()
+        print(f"✅ {self.game_name} game window closed - pet continues running!")

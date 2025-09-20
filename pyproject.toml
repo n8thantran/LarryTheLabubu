@@ -1,0 +1,15 @@
+[project]
+name = "67cv"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mediapipe>=0.10.21",
+    "numpy>=1.26.4",
+    "opencv-python>=4.11.0.86",
+    "pygame>=2.5.0",
+    "pillow>=10.0.0",
+]
+
+

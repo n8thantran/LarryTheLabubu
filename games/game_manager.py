@@ -15,6 +15,7 @@ class GameManager:
         self.current_game = None
         self.game_request_cooldown = 0
         self.last_game_time = 0
+        self.game_result_callback = None  # Callback for game results
         self._discover_games()
         
     def _discover_games(self):
@@ -62,6 +63,7 @@ class GameManager:
             
             # Create and start new game
             self.current_game = game_class()
+            self.current_game.set_result_callback(self.game_result_callback)
             self.current_game.start_game()
             self.current_game.show()
             print(f"Launched game: {self.current_game.game_name}")
@@ -82,6 +84,22 @@ class GameManager:
             self.current_game.close()
             self.current_game = None
     
+    def close_current_game_safely(self):
+        """Safely close the currently running game without affecting the pet"""
+        if self.current_game:
+            print(f"🎮 Safely closing game: {self.current_game.game_name}")
+            
+            # End the game logic first
+            self.current_game.end_game()
+            
+            # Hide the window instead of closing it completely
+            self.current_game.hide()
+            
+            # Clean up the reference
+            self.current_game = None
+            
+            print("✅ Game closed successfully, pet continues running!")
+    
     def get_available_games_info(self) -> List[dict]:
         """Get information about all available games"""
         games_info = []
@@ -95,6 +113,10 @@ class GameManager:
                 print(f"Error getting info for game {game_class.__name__}: {e}")
         return games_info
     
+    def set_game_result_callback(self, callback):
+        """Set the callback function for when games end"""
+        self.game_result_callback = callback
+    
     def update(self):
         """Update the game manager (call this regularly)"""
         self.game_request_cooldown = max(0, self.game_request_cooldown - 1)
@@ -103,7 +125,7 @@ class GameManager:
         if self.current_game and not self.current_game.game_active:
             if self.current_game.is_game_finished():
                 print(f"Game {self.current_game.game_name} finished!")
-                self.close_current_game()
+                self.close_current_game_safely()
     
     def should_request_game(self) -> bool:
         """Determine if the pet should request to play a game"""

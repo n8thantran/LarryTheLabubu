@@ -296,11 +296,13 @@ class MatchaWhiskingGame(BaseGame):
             self.game_won = True
             self.game_active = False
             self.target_label.setText("🏆 PERFECT MATCHA!")
+            self.trigger_game_end_callback()
 
         elif self.game_time <= 0 and not self.game_lost and not self.game_won:
             self.game_lost = True
             self.game_active = False
             self.target_label.setText("⏰ Time's up!")
+            self.trigger_game_end_callback()
 
         if self.game_active and not self.game_won:
             # Update liquid
@@ -466,5 +468,17 @@ class MatchaWhiskingGame(BaseGame):
         painter.setPen(QPen(QColor(255, 255, 255)))
         painter.setFont(QFont("Arial", 11, QFont.Bold))
         painter.drawText(indicator_x, indicator_y - 10, "LEVEL")
+    
+    def closeEvent(self, event):
+        """Handle window close event - only close this game window"""
+        print(f"🎮 Matcha Whisking game window closing...")
+        
+        # End game properly
+        if self.game_active:
+            self.end_game()
+        
+        # Accept the close event (only closes this window)
+        event.accept()
+        print("✅ Matcha Whisking game window closed - pet continues running!")
 
 

@@ -123,9 +123,17 @@ class DesktopPet(QWidget):
         # Game system
         self.game_manager = GameManager()
         self.games_denied = 0  # Track how many times games were denied
+        self.games_failed = 0  # Track how many games were failed (NEW)
+        self.games_won = 0  # Track how many games were won (NEW)
+        self.consecutive_failures = 0  # Track consecutive game failures (NEW)
+        self.last_game_result = None  # Track last game result (NEW)
+        self.failure_punishment_level = 0  # Escalating punishment for failures (NEW)
         self.last_game_request_time = 0
         self.wants_to_play = False
         self.game_craving = 0  # Builds up over time without games
+        
+        # Set up game result callback (NEW)
+        self.game_manager.set_game_result_callback(self.handle_game_result)
         self.friendly_comments = [
             "Hi there!",
             "Just taking a stroll around your desktop!",
@@ -182,6 +190,41 @@ class DesktopPet(QWidget):
             "I warned you I'd get annoying without games!"
         ]
         
+        # NEW: Game failure consequence comments
+        self.game_failure_comments = [
+            "You FAILED that game! Now I'm REALLY annoyed!",
+            "That's what happens when you lose! CHAOS TIME!",
+            "Failed again? I'm getting VERY angry!",
+            "You're terrible at games! Time for punishment!",
+            "Another failure means more window closing!",
+            "Can't even win a simple game... pathetic!",
+            "Failed games = failed productivity = closed windows!",
+            "I'm SO disappointed in your gaming skills!",
+            "Time to punish you for that failure!",
+            "You lost, so YOU lose your windows!",
+            "Game failure detected! Initiating CHAOS MODE!",
+            "That was embarrassing! Now I'm embarrassed for you!",
+            "Multiple failures detected! MAXIMUM PUNISHMENT!",
+            "You keep failing! I keep getting MORE evil!",
+            "This is your PUNISHMENT for losing that game!"
+        ]
+        
+        # NEW: Game victory celebration comments  
+        self.game_victory_comments = [
+            "Yay! You won! I'm so proud! 🎉",
+            "Great job! Maybe I'll be nice for a while...",
+            "Victory! That was actually impressive!",
+            "You did it! I'm feeling generous today!",
+            "Winner winner! I'll behave myself... for now.",
+            "Excellent! That game victory earned you some peace!",
+            "Amazing! You actually didn't fail this time!",
+            "Success! I'm feeling much calmer now...",
+            "Well done! That victory makes me happy! 😊",
+            "You won! Time for me to be a good pet!",
+            "Victory achieved! Chaos mode deactivated!",
+            "Great gaming! I'll give you a break from my antics!"
+        ]
+        
         # Face animation
         self.eye_state = "normal"  # normal, blinking, sleepy, mischievous
         self.mood = "happy"  # happy, sleepy, excited, mischievous, annoying
@@ -195,6 +238,9 @@ class DesktopPet(QWidget):
         
         # Position randomly on screen
         self.position_randomly()
+        
+        # Announce manual game trigger availability
+        self.show_comment("🎮 Manual game triggers ready! Press I, O, G for requests or P for instant games!")
         
         # Start animation timer
         self.timer = QTimer(self)
@@ -776,14 +822,14 @@ class DesktopPet(QWidget):
         self.show_comment("Fine, I'll let you move your cursor... for now")
     
     def request_game(self):
-        """Request to play a game"""
-        if time.time() - self.last_game_request_time < 30:  # Don't spam requests
+        """Request to play a game (automatic system)"""
+        if time.time() - self.last_game_request_time < 3:  # ULTRA SHORT cooldown for 10-15 second frequency
             return
             
         self.wants_to_play = True
         self.behavior_state = "game_request"
         self.behavior_timer = 0
-        self.behavior_duration = 300  # Give user 5 seconds to respond
+        self.behavior_duration = 180  # Shorter response time (3 seconds) for faster cycling
         self.mood = "excited"
         self.last_game_request_time = time.time()
         
@@ -791,6 +837,40 @@ class DesktopPet(QWidget):
         self.show_comment(f"{comment} (Press Y to accept, N to deny)")
         
         # Try to get focus for keyboard input
+        self.setFocus()
+        self.activateWindow()
+        self.raise_()
+    
+    def manual_request_game(self):
+        """Manually triggered game request (bypasses cooldowns and restrictions)"""
+        print("Manual game request triggered!")
+        
+        # Override current state if already requesting a game
+        if self.wants_to_play:
+            self.show_comment("You're impatient! Let's play RIGHT NOW!")
+        
+        self.wants_to_play = True
+        self.behavior_state = "game_request"
+        self.behavior_timer = 0
+        self.behavior_duration = 300  # Give more time for manual requests
+        self.mood = "excited"
+        self.last_game_request_time = time.time()  # Update time but don't restrict
+        
+        manual_comments = [
+            "Oh! You want to play RIGHT NOW? Let's do it!",
+            "Manual game request detected! I LOVE the enthusiasm!",
+            "You pressed the magic button! Game time!",
+            "Instant game request! You're speaking my language!",
+            "You summoned me for games! EXCELLENT!",
+            "Manual override activated! Let's play!",
+            "You know the shortcut! Smart human! Game time!",
+            "Bypassing cooldowns for manual request! Let's GO!"
+        ]
+        
+        comment = random.choice(manual_comments)
+        self.show_comment(f"🎮 {comment} (Press Y to accept, N to deny)")
+        
+        # Ensure focus for keyboard input
         self.setFocus()
         self.activateWindow()
         self.raise_()
@@ -814,7 +894,7 @@ class DesktopPet(QWidget):
         """Handle when a game request is denied"""
         self.wants_to_play = False
         self.games_denied += 1
-        self.game_craving += 2  # Increase craving when denied
+        self.game_craving = max(0, self.game_craving - 0.5)  # Reset some craving for faster next request
         self.annoyance_level += 1  # Get more annoying
         
         self.mood = "annoying" if self.games_denied > 2 else "mischievous"
@@ -825,6 +905,88 @@ class DesktopPet(QWidget):
         self.behavior_state = "mischief" if self.games_denied <= 2 else "annoying"
         self.behavior_timer = 0
         self.behavior_duration = random.randint(300, 600)
+    
+    def handle_game_result(self, won, lost, game_name):
+        """NEW: Handle the result when a game ends"""
+        self.last_game_result = "won" if won else "lost" if lost else "unknown"
+        
+        if won:
+            # GAME WON - Reward the user with calm behavior
+            self.games_won += 1
+            self.consecutive_failures = 0  # Reset failure streak
+            self.failure_punishment_level = max(0, self.failure_punishment_level - 2)  # Reduce punishment level
+            self.annoyance_level = max(0, self.annoyance_level - 3)  # Significantly reduce annoyance
+            self.game_craving = max(0, self.game_craving - 3)  # Reduce game craving
+            
+            # Set to happy, calm behavior
+            self.mood = "happy"
+            self.behavior_state = "walking"
+            self.behavior_timer = 0
+            self.behavior_duration = random.randint(600, 1200)  # Extra long calm period
+            
+            # Show celebration
+            comment = random.choice(self.game_victory_comments)
+            self.show_comment(f"{comment} ({game_name} completed!)")
+            
+            print(f"GAME WON: {game_name} - Pet is now calm and happy!")
+            
+        elif lost:
+            # GAME FAILED - Punish the user with escalating chaos
+            self.games_failed += 1
+            self.consecutive_failures += 1
+            self.failure_punishment_level += 2  # Increase punishment level
+            self.annoyance_level += 3  # Significantly increase annoyance
+            
+            # Escalating punishment based on consecutive failures
+            if self.consecutive_failures >= 3:
+                # MAXIMUM PUNISHMENT - Immediate chaos mode
+                self.annoyance_level += 5
+                self.behavior_state = "annoying"
+                self.mood = "annoying"
+                self.behavior_duration = random.randint(900, 1800)  # Very long punishment period
+                
+                # Immediate window closing punishment
+                if random.random() < 0.8:  # 80% chance of immediate punishment
+                    self.evil_mouse_close_window()
+                
+                # Start aggressive behaviors
+                if random.random() < 0.6:  # 60% chance
+                    self.start_cursor_stalking()
+                elif random.random() < 0.4:  # 40% chance
+                    self.start_browser_hunt()
+                    
+                punishment_comment = "MULTIPLE FAILURES DETECTED! MAXIMUM PUNISHMENT MODE!"
+                
+            elif self.consecutive_failures == 2:
+                # High punishment
+                self.annoyance_level += 2
+                self.behavior_state = "annoying"
+                self.mood = "annoying"
+                self.behavior_duration = random.randint(600, 1200)
+                
+                # Likely window closing
+                if random.random() < 0.6:  # 60% chance
+                    self.evil_mouse_close_window()
+                    
+                punishment_comment = "TWO FAILURES! You're really bad at this!"
+                
+            else:
+                # Initial punishment
+                self.behavior_state = "mischief"
+                self.mood = "mischievous"
+                self.behavior_duration = random.randint(300, 600)
+                punishment_comment = "GAME FAILURE! Time for some chaos!"
+            
+            # Show punishment comment
+            base_comment = random.choice(self.game_failure_comments)
+            self.show_comment(f"{base_comment} {punishment_comment} ({game_name} failed!)")
+            
+            print(f"GAME FAILED: {game_name} - Consecutive failures: {self.consecutive_failures}, Punishment level: {self.failure_punishment_level}")
+            
+            # Reset timers for immediate action
+            self.behavior_timer = 0
+            
+        print(f"Game stats - Won: {self.games_won}, Failed: {self.games_failed}, Denied: {self.games_denied}")
     
     def game_request_behavior(self):
         """Behavior when requesting a game - stand still and look excited"""
@@ -1145,15 +1307,15 @@ class DesktopPet(QWidget):
         # Update game system
         self.game_manager.update()
         
-        # Build up game craving over time
+        # Build up game craving over time (ULTRA FREQUENT - 10-15 second target!)
         if not self.game_manager.is_game_running():
-            self.game_craving += 0.01  # Slow buildup
+            self.game_craving += 0.15  # ULTRA fast buildup (was 0.05, now 3x faster!)
             
-        # Request games based on craving and mood
+        # Request games based on craving and mood (EVERY 10-15 SECONDS!)
         if (not self.wants_to_play and 
             not self.game_manager.is_game_running() and
-            self.game_craving > 5 and
-            random.random() < 0.002):  # 0.2% chance per frame when craving is high
+            self.game_craving > 1 and  # VERY low threshold (was 2, now 1)
+            random.random() < 0.03):  # ULTRA high chance per frame (was 0.01 = 1%, now 3%!)
             self.request_game()
         
         # Handle blinking animation
@@ -1220,16 +1382,21 @@ class DesktopPet(QWidget):
         """Change to a new behavior - friendly by default, annoying when provoked or craving games"""
         behaviors = ["walking", "resting", "mischief", "annoying", "cursor_stalking", "browser_hunting", "game_request"]
         
-        # Calculate combined annoyance from both annoyance level and game craving
-        total_annoyance = self.annoyance_level + (self.game_craving / 3)
+        # Calculate combined annoyance from multiple sources (ENHANCED)
+        total_annoyance = self.annoyance_level + (self.game_craving / 3) + (self.failure_punishment_level / 2) + (self.consecutive_failures * 2)
         
-        # Only get annoying when annoyance level is high or really craving games
-        if total_annoyance < 1 and self.game_craving < 3:
-            weights = [0.6, 0.25, 0.0, 0.0, 0.0, 0.0, 0.15]  # Include some game requests
-        elif total_annoyance < 3:
-            weights = [0.4, 0.2, 0.1, 0.05, 0.0, 0.05, 0.2]  # More game requests when slightly annoyed/craving
-        elif total_annoyance < 8:
-            weights = [0.25, 0.1, 0.15, 0.15, 0.1, 0.15, 0.1]  # Balanced behaviors when moderately annoyed
+        # Factor in recent game failures for more aggressive behavior
+        failure_factor = min(3, self.consecutive_failures)  # Cap at 3 for calculation
+        
+        # Only get annoying when annoyance level is high or really craving games (ULTRA FREQUENT GAME REQUESTS!)
+        if total_annoyance < 1 and self.game_craving < 1 and failure_factor == 0:  # Even lower threshold
+            weights = [0.3, 0.15, 0.0, 0.0, 0.0, 0.0, 0.55]  # ULTRA game requests (55%!)
+        elif total_annoyance < 3 and failure_factor <= 1:
+            weights = [0.2, 0.1, 0.1, 0.05, 0.0, 0.05, 0.5]  # MASSIVE game requests (50%!)
+        elif total_annoyance < 8 and failure_factor <= 2:
+            weights = [0.15, 0.07, 0.1, 0.1, 0.08, 0.1, 0.4]  # High game requests (40%!)
+        elif failure_factor >= 3:  # MAXIMUM PUNISHMENT MODE
+            weights = [0.05, 0.02, 0.25, 0.4, 0.13, 0.15, 0.0]  # Heavy focus on chaos when many failures
         else:
             weights = [0.1, 0.05, 0.2, 0.3, 0.15, 0.2, 0.0]  # No more game requests when highly annoyed, just chaos
         
@@ -1264,7 +1431,7 @@ class DesktopPet(QWidget):
             self.eye_state = "mischievous"
             self.start_browser_hunt()
         elif self.behavior_state == "game_request":
-            self.behavior_duration = random.randint(120, 300)  # Time to wait for response
+            self.behavior_duration = random.randint(120, 180)  # Shorter wait time for faster cycling
             self.mood = "excited"
             self.eye_state = "normal"
             self.request_game()
@@ -1332,30 +1499,68 @@ class DesktopPet(QWidget):
             self.show_comment(random.choice(comments))
     
     def extra_annoying_behavior(self):
-        """Maximum annoyance mode - includes random mouse control!"""
-        # Move erratically
-        self.velocity_x += random.uniform(-1, 1)
-        self.velocity_y += random.uniform(-1, 1)
+        """Maximum annoyance mode - includes random mouse control! ENHANCED for game failure punishment"""
+        # Move more erratically when in punishment mode
+        erratic_factor = 1 + (self.failure_punishment_level * 0.3)
+        self.velocity_x += random.uniform(-1 * erratic_factor, 1 * erratic_factor)
+        self.velocity_y += random.uniform(-1 * erratic_factor, 1 * erratic_factor)
+        
+        # Calculate enhanced aggression based on failure punishment
+        base_chance = 0.002  # 0.2% base chance
+        failure_bonus = self.failure_punishment_level * 0.001  # Add more aggression for failures
+        consecutive_bonus = self.consecutive_failures * 0.002  # Even more for consecutive failures
+        total_chance = base_chance + failure_bonus + consecutive_bonus
         
         # Super high annoyance - randomly take control of mouse anywhere!
         if (self.annoyance_level > 10 and 
-            random.random() < 0.002 and  # 0.2% chance per frame 
+            random.random() < total_chance and  # Enhanced chance with failures
             not self.is_controlling_mouse):
             
-            self.show_comment("SURPRISE MOUSE HIJACKING!")
+            if self.consecutive_failures >= 3:
+                self.show_comment("PUNISHMENT MODE: SURPRISE MOUSE HIJACKING!")
+            else:
+                self.show_comment("SURPRISE MOUSE HIJACKING!")
             self.evil_mouse_close_window()
         
-        # Frequent annoying comments
-        if random.random() < 0.025:
-            comments = [
-                "LOOK AT ME! LOOK AT ME!",
-                "I'm being SUPER helpful!",
-                "Did someone say PRODUCTIVITY?",
-                "Time to REORGANIZE your desktop!",
-                "MAXIMUM ANNOYANCE MODE ACTIVATED!",
-                "I could take control of your mouse anytime!",
-                "Want to see something REALLY annoying?"
-            ]
+        # More frequent cursor stalking when in punishment mode
+        if (self.consecutive_failures >= 2 and 
+            random.random() < 0.008 and  # Higher chance for failures
+            self.behavior_state != "cursor_stalking"):
+            self.start_cursor_stalking()
+        
+        # Enhanced comment frequency based on failure level
+        comment_chance = 0.025 + (self.failure_punishment_level * 0.01)
+        if random.random() < comment_chance:
+            if self.consecutive_failures >= 3:
+                # Maximum punishment comments
+                comments = [
+                    "THIS IS YOUR PUNISHMENT FOR MULTIPLE FAILURES!",
+                    "YOU KEEP FAILING GAMES, SO I KEEP GETTING WORSE!",
+                    "MAXIMUM CHAOS MODE: ALL FAILURES LEAD TO THIS!",
+                    "FAILED GAMES = MAXIMUM ANNOYANCE!",
+                    "I WARNED YOU ABOUT FAILING THOSE GAMES!",
+                    "CONSECUTIVE FAILURES DETECTED: PUNISHMENT INTENSIFIED!"
+                ]
+            elif self.failure_punishment_level > 5:
+                # High punishment comments
+                comments = [
+                    "THIS IS FOR FAILING THAT GAME!",
+                    "GAME FAILURES MAKE ME EXTRA EVIL!",
+                    "YOU LOST, NOW YOU LOSE YOUR PRODUCTIVITY!",
+                    "FAILED GAMES = CLOSED WINDOWS!",
+                    "PUNISHMENT MODE: ACTIVATED!"
+                ]
+            else:
+                # Standard annoying comments
+                comments = [
+                    "LOOK AT ME! LOOK AT ME!",
+                    "I'm being SUPER helpful!",
+                    "Did someone say PRODUCTIVITY?",
+                    "Time to REORGANIZE your desktop!",
+                    "MAXIMUM ANNOYANCE MODE ACTIVATED!",
+                    "I could take control of your mouse anytime!",
+                    "Want to see something REALLY annoying?"
+                ]
             self.show_comment(random.choice(comments))
     
     def check_window_closing_zone(self):
@@ -1487,8 +1692,37 @@ class DesktopPet(QWidget):
             self.show_comment("DOUBLE CLICK = DOUBLE ANNOYANCE!")
     
     def keyPressEvent(self, event):
-        """Handle keyboard events - mainly for responding to game requests"""
+        """Handle keyboard events - game responses and manual game triggers"""
         print(f"Key pressed: {event.key()}, wants_to_play: {self.wants_to_play}, behavior: {self.behavior_state}")
+        
+        # Ensure pet window has focus for keyboard input
+        if not self.hasFocus():
+            self.setFocus()
+            self.activateWindow()
+            self.raise_()
+        
+        # MANUAL GAME TRIGGERS - Press I, O, or G to instantly request games!
+        if event.key() in [Qt.Key_I, Qt.Key_O, Qt.Key_G]:
+            key_name = event.text().upper() if event.text() else "SPECIAL_KEY"
+            print(f"Manual game trigger activated! ({key_name} pressed)")
+            self.manual_request_game()
+            super().keyPressEvent(event)
+            return
+        
+        # INSTANT GAME LAUNCH - Press P to immediately launch a random game (bypass request)
+        if event.key() == Qt.Key_P:
+            print("Instant game launch activated! (P pressed)")
+            self.show_comment("🎮 INSTANT GAME LAUNCH! No questions asked!")
+            self.launch_random_game()
+            super().keyPressEvent(event)
+            return
+        
+        # HELP - Press H to show keyboard shortcuts
+        if event.key() == Qt.Key_H:
+            help_message = "🎮 KEYBOARD SHORTCUTS: I/O/G = Request Game | P = Instant Game | Y = Accept | N = Deny | H = Help"
+            self.show_comment(help_message)
+            super().keyPressEvent(event)
+            return
         
         if self.wants_to_play and self.behavior_state == "game_request":
             if event.key() == Qt.Key_Y:
@@ -1525,9 +1759,9 @@ def main():
     pet = DesktopPet()
     pet.show()
     
-    print("EVIL DESKTOP ASSISTANT IS NOW ACTIVE!")
+    print("🎮 GAME-BASED CHAOS PET IS NOW ACTIVE! 🎮")
     print("")
-    print("EXTREME WARNING: This assistant will:")
+    print("⚠️ EXTREME WARNING: This pet PUNISHES game failures! ⚠️")
     print("- Walk around your desktop like a real pet")
     print("- Make random annoying comments")
     print("- PHYSICALLY CONTROL YOUR MOUSE CURSOR!")
@@ -1536,12 +1770,29 @@ def main():
     print("- Get MORE evil the longer it runs")
     print("- Eventually hijack your mouse from anywhere!")
     print("")
-    print("Controls:")
+    print("🎯 ULTRA-FREQUENT GAME MECHANICS:")
+    print("- Games pop up EVERY 10-15 SECONDS!")
+    print("- WINNING games makes the pet calm and happy!")
+    print("- FAILING games triggers PUNISHMENT MODE!")
+    print("- Multiple failures = MAXIMUM CHAOS!")
+    print("- Consecutive failures = Escalating punishments!")
+    print("- The pet NEVER closes regardless of wins/losses!")
+    print("- Game failures cause immediate window closing!")
+    print("- Punishment level increases with each failure!")
+    print("- Get ready for CONSTANT game requests!")
+    print("")
+    print("🎮 Controls:")
     print("- Click and drag to move (it will complain!)")
     print("- Double-click to make it EXTRA evil")
+    print("- 🆕 MANUAL GAME TRIGGERS:")
+    print("  * Press I, O, or G to instantly request games!")
+    print("  * Press P to immediately launch a game (no request)!")
+    print("  * Press H for keyboard shortcut help!")
     print("- When it asks to play games:")
     print("  * Press Y to accept, N to deny (make sure pet window has focus)")
     print("  * OR double-click the pet to launch a game quickly")
+    print("  * WIN the games to keep it calm!")
+    print("  * LOSE games at your own risk!")
     print("- Denying games makes it more annoying!")
     print("- Press Ctrl+C to make it go away")
     print("")
