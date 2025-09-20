@@ -13,6 +13,9 @@ from PySide6.QtWidgets import QApplication, QWidget, QMessageBox
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect
 
+# Import game system
+from games.game_manager import GameManager
+
 # Platform detection
 CURRENT_PLATFORM = platform.system()
 IS_WINDOWS = CURRENT_PLATFORM == "Windows"
@@ -67,7 +70,7 @@ class DesktopPet(QWidget):
         self.cursor_grab_timer = 0
         
         # Pet behavior states
-        self.behavior_state = "walking"  # walking, resting, mischief, annoying, cursor_stalking, browser_hunting
+        self.behavior_state = "walking"  # walking, resting, mischief, annoying, cursor_stalking, browser_hunting, game_request
         self.behavior_timer = 0
         self.behavior_duration = random.randint(120, 300)  # Frames to stay in current behavior
         self.rest_timer = 0
@@ -94,6 +97,13 @@ class DesktopPet(QWidget):
         self.is_controlling_mouse = False  # Track when we're hijacking the mouse
         self.original_mouse_pos = None
         self.mouse_control_timer = 0
+        
+        # Game system
+        self.game_manager = GameManager()
+        self.games_denied = 0  # Track how many times games were denied
+        self.last_game_request_time = 0
+        self.wants_to_play = False
+        self.game_craving = 0  # Builds up over time without games
         self.friendly_comments = [
             "Hi there!",
             "Just taking a stroll around your desktop!",
@@ -103,6 +113,28 @@ class DesktopPet(QWidget):
             "Don't mind me, just walking around!",
             "Your screen looks great today!",
             "I'm your friendly desktop companion!"
+        ]
+
+        self.game_request_comments = [
+            "Hey! Want to play a game with me?",
+            "I'm bored! Can we play something fun?",
+            "Games are fun! Let's play one!",
+            "I know some cool games we could try!",
+            "Please please please can we play a game?",
+            "I promise it'll be fun! Just one game?",
+            "I'm getting lonely... want to play?",
+            "Games make everything better! Let's play!"
+        ]
+
+        self.game_denied_comments = [
+            "Aww, no games? That's disappointing...",
+            "But games are fun! Why not?",
+            "Fine, I'll just have to entertain myself...",
+            "No games means I get more mischievous!",
+            "Your loss! Games keep me calm...",
+            "I might get more annoying without games...",
+            "Games prevent me from causing chaos...",
+            "Well, if I can't play games, I'll find other fun..."
         ]
 
         self.annoying_comments = [
@@ -121,7 +153,11 @@ class DesktopPet(QWidget):
             "Your mouse is mine now!",
             "I'm coming for your cursor!",
             "Your cursor is MINE! You can't move it!",
-            "Time to lock your cursor in place!"
+            "Time to lock your cursor in place!",
+            "You should have let me play games!",
+            "This is what happens when I don't get to play!",
+            "Games would have kept me peaceful...",
+            "I warned you I'd get annoying without games!"
         ]
         
         # Face animation
@@ -157,6 +193,10 @@ class DesktopPet(QWidget):
         
         # Set fixed size
         self.setFixedSize(self.pet_size, self.pet_size)
+        
+        # Enable focus for keyboard input
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocus()
         
         # Set window title (for debugging)
         self.setWindowTitle("Desktop Pet")
@@ -588,6 +628,63 @@ class DesktopPet(QWidget):
         self.cursor_lock_position = None
         self.mood = "mischievous"
         self.show_comment("Fine, I'll let you move your cursor... for now")
+    
+    def request_game(self):
+        """Request to play a game"""
+        if time.time() - self.last_game_request_time < 30:  # Don't spam requests
+            return
+            
+        self.wants_to_play = True
+        self.behavior_state = "game_request"
+        self.behavior_timer = 0
+        self.behavior_duration = 180  # Give user 3 seconds to respond
+        self.mood = "excited"
+        self.last_game_request_time = time.time()
+        
+        comment = random.choice(self.game_request_comments)
+        self.show_comment(comment)
+    
+    def launch_random_game(self):
+        """Launch a random game"""
+        game = self.game_manager.launch_game()
+        if game:
+            self.wants_to_play = False
+            self.game_craving = max(0, self.game_craving - 5)  # Reduce craving when game is played
+            self.mood = "happy"
+            self.show_comment(f"Yay! Let's play {game.game_name}!")
+            return True
+        else:
+            self.show_comment("No games available... that's sad!")
+            return False
+    
+    def deny_game_request(self):
+        """Handle when a game request is denied"""
+        self.wants_to_play = False
+        self.games_denied += 1
+        self.game_craving += 2  # Increase craving when denied
+        self.annoyance_level += 1  # Get more annoying
+        
+        self.mood = "annoying" if self.games_denied > 2 else "mischievous"
+        comment = random.choice(self.game_denied_comments)
+        self.show_comment(comment)
+        
+        # Become more mischievous after being denied
+        self.behavior_state = "mischief" if self.games_denied <= 2 else "annoying"
+        self.behavior_timer = 0
+        self.behavior_duration = random.randint(300, 600)
+    
+    def game_request_behavior(self):
+        """Behavior when requesting a game - stand still and look excited"""
+        self.velocity_x *= 0.8
+        self.velocity_y *= 0.8
+        
+        # Bounce a little with excitement
+        if self.behavior_timer % 30 == 0:  # Every half second
+            self.velocity_y -= 1
+        
+        # If no response after duration, assume denied
+        if self.behavior_timer >= self.behavior_duration:
+            self.deny_game_request()
 
     def cursor_stalking_behavior(self):
         """Walk towards the cursor position"""
@@ -889,6 +986,20 @@ class DesktopPet(QWidget):
         self.walk_cycle += 1
         current_time = time.time()
         
+        # Update game system
+        self.game_manager.update()
+        
+        # Build up game craving over time
+        if not self.game_manager.is_game_running():
+            self.game_craving += 0.01  # Slow buildup
+            
+        # Request games based on craving and mood
+        if (not self.wants_to_play and 
+            not self.game_manager.is_game_running() and
+            self.game_craving > 5 and
+            random.random() < 0.002):  # 0.2% chance per frame when craving is high
+            self.request_game()
+        
         # Handle blinking animation
         if self.blink_timer > 120:  # Blink every 2 seconds
             self.is_blinking = True
@@ -936,6 +1047,8 @@ class DesktopPet(QWidget):
             self.browser_hunt_behavior()
         elif self.behavior_state == "annoying":
             self.extra_annoying_behavior()
+        elif self.behavior_state == "game_request":
+            self.game_request_behavior()
             
         # Apply physics and move
         self.apply_walking_physics()
@@ -948,17 +1061,21 @@ class DesktopPet(QWidget):
         self.update()
     
     def change_annoying_behavior(self):
-        """Change to a new behavior - friendly by default, annoying when provoked"""
-        behaviors = ["walking", "resting", "mischief", "annoying", "cursor_stalking", "browser_hunting"]
-        # Only get annoying when annoyance level is high
-        if self.annoyance_level == 0:
-            weights = [0.7, 0.3, 0.0, 0.0, 0.0, 0.0]  # Only friendly behaviors when not annoyed
-        elif self.annoyance_level < 3:
-            weights = [0.5, 0.25, 0.1, 0.05, 0.0, 0.1]  # Rare browser hunting when slightly annoyed
-        elif self.annoyance_level < 8:
-            weights = [0.3, 0.15, 0.15, 0.15, 0.1, 0.15]  # More browser hunting when moderately annoyed
+        """Change to a new behavior - friendly by default, annoying when provoked or craving games"""
+        behaviors = ["walking", "resting", "mischief", "annoying", "cursor_stalking", "browser_hunting", "game_request"]
+        
+        # Calculate combined annoyance from both annoyance level and game craving
+        total_annoyance = self.annoyance_level + (self.game_craving / 3)
+        
+        # Only get annoying when annoyance level is high or really craving games
+        if total_annoyance < 1 and self.game_craving < 3:
+            weights = [0.6, 0.25, 0.0, 0.0, 0.0, 0.0, 0.15]  # Include some game requests
+        elif total_annoyance < 3:
+            weights = [0.4, 0.2, 0.1, 0.05, 0.0, 0.05, 0.2]  # More game requests when slightly annoyed/craving
+        elif total_annoyance < 8:
+            weights = [0.25, 0.1, 0.15, 0.15, 0.1, 0.15, 0.1]  # Balanced behaviors when moderately annoyed
         else:
-            weights = [0.1, 0.05, 0.15, 0.25, 0.2, 0.25]  # Lots of browser hunting when highly provoked
+            weights = [0.1, 0.05, 0.2, 0.3, 0.15, 0.2, 0.0]  # No more game requests when highly annoyed, just chaos
         
         self.behavior_state = random.choices(behaviors, weights=weights)[0]
         self.behavior_timer = 0
@@ -990,6 +1107,11 @@ class DesktopPet(QWidget):
             self.mood = "mischievous"
             self.eye_state = "mischievous"
             self.start_browser_hunt()
+        elif self.behavior_state == "game_request":
+            self.behavior_duration = random.randint(120, 300)  # Time to wait for response
+            self.mood = "excited"
+            self.eye_state = "normal"
+            self.request_game()
         else:  # annoying
             self.behavior_duration = random.randint(120, 240)
             self.mood = "annoying"
@@ -1198,6 +1320,21 @@ class DesktopPet(QWidget):
             self.behavior_duration = random.randint(180, 360)
             self.comment_cooldown = 5  # Much shorter cooldown
             self.show_comment("DOUBLE CLICK = DOUBLE ANNOYANCE!")
+    
+    def keyPressEvent(self, event):
+        """Handle keyboard events - mainly for responding to game requests"""
+        if self.wants_to_play and self.behavior_state == "game_request":
+            if event.key() == Qt.Key_Y:
+                # Accept game request
+                self.launch_random_game()
+                self.behavior_state = "walking"
+                self.behavior_timer = 0
+                self.behavior_duration = random.randint(180, 360)
+            elif event.key() == Qt.Key_N:
+                # Deny game request
+                self.deny_game_request()
+        
+        super().keyPressEvent(event)
 
 
 def signal_handler(signum, frame):
@@ -1233,6 +1370,8 @@ def main():
     print("Controls:")
     print("- Click and drag to move (it will complain!)")
     print("- Double-click to make it EXTRA evil")
+    print("- When it asks to play games: Press Y to accept, N to deny")
+    print("- Denying games makes it more annoying!")
     print("- Press Ctrl+C to make it go away")
     print("")
     if IS_WINDOWS and not WINDOWS_AVAILABLE:
