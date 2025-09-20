@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Annoying Desktop Assistant - A mischievous pink square that walks around and closes your windows!
+Annoying Desktop Assistant - A mischievous desktop pet that walks around and closes your windows!
 """
 
 import sys
@@ -9,9 +9,18 @@ import signal
 import math
 import time
 import platform
-from PySide6.QtWidgets import QApplication, QWidget, QMessageBox
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush
+import os
+from PySide6.QtWidgets import QApplication, QWidget, QMessageBox, QLabel
+from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPixmap, QImage
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect
+
+# Image processing
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    print("PIL not available. Install Pillow for sprite support: pip install Pillow")
+    PIL_AVAILABLE = False
 
 # Import game system
 from games.game_manager import GameManager
@@ -54,13 +63,26 @@ class DesktopPet(QWidget):
         super().__init__()
         
         # Pet properties
-        self.pet_size = 50  # Size of the pink square
+        self.pet_size = 120  # Size of the sprite (increased from 50 for better visibility)
         self.velocity_x = random.choice([-1, 1])  # Walking speed
         self.velocity_y = 0  # Start on ground
         self.gravity = 0.3  # Stronger gravity for walking
         self.bounce_damping = 0.6  # Less bouncy
         self.walking_speed = 1.5  # Base walking speed
         self.is_on_ground = False
+
+        # Sprite system - 6 rows × 5 columns
+        self.sprite_frames = []  # Will hold all sprite frames as QPixmap objects
+        self.sprite_rows = 6  # Different animation states
+        self.sprite_cols = 5  # Animation frames per state
+        self.current_sprite_row = 0  # Current animation row (state)
+        self.current_sprite_frame = 0  # Current frame within the row
+        self.animation_timer = 0  # Timer for frame cycling
+        self.animation_speed = 8  # Frames to wait between sprite changes (slower = less frequent changes)
+        self.use_sprites = False  # Will be True if sprites loaded successfully
+        
+        # Load sprite sheet
+        self.load_sprites()
 
         # Direction and rotation tracking
         self.facing_direction = 1 if self.velocity_x > 0 else -1  # 1 = right, -1 = left
@@ -179,6 +201,112 @@ class DesktopPet(QWidget):
         self.timer.timeout.connect(self.update_position)
         self.timer.start(16)  # ~60 FPS
         
+    def load_sprites(self):
+        """Load and process the sprite sheet into individual frames"""
+        sprite_file = "pet_sprites.png"
+        
+        if not PIL_AVAILABLE:
+            print("PIL not available - using fallback rendering")
+            return
+            
+        if not os.path.exists(sprite_file):
+            print(f"Sprite file '{sprite_file}' not found - using fallback rendering")
+            return
+            
+        try:
+            # Load the sprite sheet
+            sprite_sheet = Image.open(sprite_file)
+            sheet_width, sheet_height = sprite_sheet.size
+            
+            # Calculate individual sprite dimensions
+            sprite_width = sheet_width // self.sprite_cols
+            sprite_height = sheet_height // self.sprite_rows
+            
+            print(f"Loading sprite sheet: {sheet_width}x{sheet_height}")
+            print(f"Individual sprite size: {sprite_width}x{sprite_height}")
+            print(f"Grid: {self.sprite_rows} rows × {self.sprite_cols} columns")
+            
+            # Extract each sprite frame
+            self.sprite_frames = []
+            for row in range(self.sprite_rows):
+                row_frames = []
+                for col in range(self.sprite_cols):
+                    # Calculate crop coordinates
+                    left = col * sprite_width
+                    top = row * sprite_height
+                    right = left + sprite_width
+                    bottom = top + sprite_height
+                    
+                    # Extract the frame
+                    frame = sprite_sheet.crop((left, top, right, bottom))
+                    
+                    # Convert to RGBA and handle transparency
+                    frame = frame.convert("RGBA")
+                    
+                    # Remove black backgrounds by making dark pixels transparent
+                    data = frame.getdata()
+                    new_data = []
+                    for item in data:
+                        # If pixel is very dark (close to black), make it transparent
+                        if item[0] < 30 and item[1] < 30 and item[2] < 30:
+                            new_data.append((item[0], item[1], item[2], 0))  # Transparent
+                        else:
+                            new_data.append(item)  # Keep original
+                    
+                    frame.putdata(new_data)
+                    
+                    # Resize to pet size
+                    frame = frame.resize((self.pet_size, self.pet_size), Image.Resampling.LANCZOS)
+                    
+                    # Convert PIL image to QPixmap
+                    # First convert to QImage
+                    w, h = frame.size
+                    qimg = QImage(frame.tobytes("raw", "RGBA"), w, h, QImage.Format_RGBA8888)
+                    
+                    # Then convert to QPixmap
+                    qpixmap = QPixmap.fromImage(qimg)
+                    
+                    row_frames.append(qpixmap)
+                
+                self.sprite_frames.append(row_frames)
+            
+            self.use_sprites = True
+            print(f"Successfully loaded {len(self.sprite_frames)} rows of {len(self.sprite_frames[0])} sprites each")
+            
+        except Exception as e:
+            print(f"Failed to load sprites: {e}")
+            print("Using fallback rendering")
+            self.use_sprites = False
+    
+    def get_sprite_row_for_behavior(self, behavior_state):
+        """Map behavior states to sprite sheet rows"""
+        behavior_to_row = {
+            "walking": 0,      # Row 0: Walking animation
+            "resting": 1,      # Row 1: Resting/idle animation
+            "mischief": 2,     # Row 2: Mischievous behavior
+            "annoying": 3,     # Row 3: Extra annoying behavior
+            "cursor_stalking": 4,  # Row 4: Cursor stalking
+            "browser_hunting": 4,  # Row 4: Browser hunting (same as stalking)
+            "game_request": 5,     # Row 5: Game request/excited
+        }
+        return behavior_to_row.get(behavior_state, 0)  # Default to walking
+    
+    def update_sprite_animation(self):
+        """Update sprite animation frame"""
+        if not self.use_sprites:
+            return
+            
+        # Update animation timer
+        self.animation_timer += 1
+        
+        # Change frame when timer reaches animation speed
+        if self.animation_timer >= self.animation_speed:
+            self.animation_timer = 0
+            self.current_sprite_frame = (self.current_sprite_frame + 1) % self.sprite_cols
+            
+        # Update sprite row based on current behavior
+        self.current_sprite_row = self.get_sprite_row_for_behavior(self.behavior_state)
+        
     def setup_window(self):
         """Configure window properties for desktop pet behavior"""
         # Set window flags for frameless, always-on-top, transparent background
@@ -209,7 +337,7 @@ class DesktopPet(QWidget):
         self.move(x, y)
         
     def paintEvent(self, event):
-        """Draw the pink square pet with a cute face"""
+        """Draw the animated sprite or fallback pink square"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
@@ -220,16 +348,34 @@ class DesktopPet(QWidget):
         painter.rotate(self.rotation_angle)
         painter.translate(-center_x, -center_y)
 
-        # Draw pink square with a slight border for visibility
-        painter.setBrush(QColor(255, 182, 193))  # Light pink
-        painter.setPen(QPen(QColor(255, 105, 180), 2))  # Hot pink border
+        if self.use_sprites and self.sprite_frames:
+            # Draw the current sprite frame
+            if (0 <= self.current_sprite_row < len(self.sprite_frames) and
+                0 <= self.current_sprite_frame < len(self.sprite_frames[self.current_sprite_row])):
+                
+                current_pixmap = self.sprite_frames[self.current_sprite_row][self.current_sprite_frame]
+                
+                # Flip sprite horizontally if facing left
+                if self.facing_direction == -1:
+                    # Create a flipped version
+                    flipped_pixmap = current_pixmap.transformed(
+                        painter.transform().scale(-1, 1),
+                        Qt.SmoothTransformation
+                    )
+                    painter.drawPixmap(0, 0, flipped_pixmap)
+                else:
+                    painter.drawPixmap(0, 0, current_pixmap)
+        else:
+            # Fallback: Draw pink square with a cute face
+            painter.setBrush(QColor(255, 182, 193))  # Light pink
+            painter.setPen(QPen(QColor(255, 105, 180), 2))  # Hot pink border
 
-        # Draw the square with rounded corners for a friendlier look
-        rect = QRect(2, 2, self.pet_size - 4, self.pet_size - 4)
-        painter.drawRoundedRect(rect, 8, 8)
+            # Draw the square with rounded corners for a friendlier look
+            rect = QRect(2, 2, self.pet_size - 4, self.pet_size - 4)
+            painter.drawRoundedRect(rect, 8, 8)
 
-        # Draw the face
-        self.draw_face(painter)
+            # Draw the face
+            self.draw_face(painter)
     
     def draw_face(self, painter):
         """Draw a cute face on the pet"""
@@ -977,6 +1123,9 @@ class DesktopPet(QWidget):
         """Update pet position with annoying assistant behavior"""
         if self._is_dragging:
             return
+
+        # Update sprite animation
+        self.update_sprite_animation()
 
         # Update direction and rotation based on velocity
         if abs(self.velocity_x) > 0.1:
