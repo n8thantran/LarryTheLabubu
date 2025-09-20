@@ -637,16 +637,23 @@ class DesktopPet(QWidget):
         self.wants_to_play = True
         self.behavior_state = "game_request"
         self.behavior_timer = 0
-        self.behavior_duration = 180  # Give user 3 seconds to respond
+        self.behavior_duration = 300  # Give user 5 seconds to respond
         self.mood = "excited"
         self.last_game_request_time = time.time()
         
         comment = random.choice(self.game_request_comments)
-        self.show_comment(comment)
+        self.show_comment(f"{comment} (Press Y to accept, N to deny)")
+        
+        # Try to get focus for keyboard input
+        self.setFocus()
+        self.activateWindow()
+        self.raise_()
     
     def launch_random_game(self):
         """Launch a random game"""
+        print("Attempting to launch game...")
         game = self.game_manager.launch_game()
+        print(f"Game launched: {game}")
         if game:
             self.wants_to_play = False
             self.game_craving = max(0, self.game_craving - 5)  # Reduce craving when game is played
@@ -1308,8 +1315,17 @@ class DesktopPet(QWidget):
             self.show_comment("Now I'm REALLY going to cause trouble!")
             
     def mouseDoubleClickEvent(self, event):
-        """Handle double-click - makes pet EXTRA annoying"""
+        """Handle double-click - makes pet EXTRA annoying or launches game for testing"""
         if event.button() == Qt.LeftButton:
+            # If the pet wants to play, launch a game directly (for testing)
+            if self.wants_to_play:
+                print("Double-click detected during game request - launching game!")
+                self.launch_random_game()
+                self.behavior_state = "walking"
+                self.behavior_timer = 0
+                self.behavior_duration = random.randint(180, 360)
+                return
+            
             # Make the pet super annoying
             self.annoyance_level += 3
             self.velocity_x += random.uniform(-3, 3)
@@ -1323,15 +1339,19 @@ class DesktopPet(QWidget):
     
     def keyPressEvent(self, event):
         """Handle keyboard events - mainly for responding to game requests"""
+        print(f"Key pressed: {event.key()}, wants_to_play: {self.wants_to_play}, behavior: {self.behavior_state}")
+        
         if self.wants_to_play and self.behavior_state == "game_request":
             if event.key() == Qt.Key_Y:
                 # Accept game request
+                print("Accepting game request!")
                 self.launch_random_game()
                 self.behavior_state = "walking"
                 self.behavior_timer = 0
                 self.behavior_duration = random.randint(180, 360)
             elif event.key() == Qt.Key_N:
                 # Deny game request
+                print("Denying game request!")
                 self.deny_game_request()
         
         super().keyPressEvent(event)
@@ -1370,7 +1390,9 @@ def main():
     print("Controls:")
     print("- Click and drag to move (it will complain!)")
     print("- Double-click to make it EXTRA evil")
-    print("- When it asks to play games: Press Y to accept, N to deny")
+    print("- When it asks to play games:")
+    print("  * Press Y to accept, N to deny (make sure pet window has focus)")
+    print("  * OR double-click the pet to launch a game quickly")
     print("- Denying games makes it more annoying!")
     print("- Press Ctrl+C to make it go away")
     print("")
