@@ -25,6 +25,14 @@ except ImportError:
 # Import game system
 from games.game_manager import GameManager
 
+# Import voice system
+try:
+    from voice_system import LabubuVoice
+    VOICE_AVAILABLE = True
+except ImportError:
+    print("Voice system not available. Install ElevenLabs dependencies.")
+    VOICE_AVAILABLE = False
+
 # Platform detection
 CURRENT_PLATFORM = platform.system()
 IS_WINDOWS = CURRENT_PLATFORM == "Windows"
@@ -134,6 +142,19 @@ class DesktopPet(QWidget):
         
         # Set up game result callback (NEW)
         self.game_manager.set_game_result_callback(self.handle_game_result)
+        
+        # Voice system
+        self.voice_system = None
+        self.voice_timer = 0
+        self.voice_interval = random.randint(300, 600)  # 5-10 seconds between voice lines
+        
+        if VOICE_AVAILABLE:
+            try:
+                self.voice_system = LabubuVoice()
+                print("Labubu voice system loaded! 🎤")
+            except Exception as e:
+                print(f"Failed to initialize voice system: {e}")
+                self.voice_system = None
         self.friendly_comments = [
             "Hi there!",
             "Just taking a stroll around your desktop!",
@@ -142,7 +163,10 @@ class DesktopPet(QWidget):
             "Just stretching my digital legs!",
             "Don't mind me, just walking around!",
             "Your screen looks great today!",
-            "I'm your friendly desktop companion!"
+            "I'm your friendly desktop companion!",
+            "labu-labu",
+            "six seven",
+            "forty-one"
         ]
 
         self.game_request_comments = [
@@ -153,7 +177,8 @@ class DesktopPet(QWidget):
             "Please please please can we play a game?",
             "I promise it'll be fun! Just one game?",
             "I'm getting lonely... want to play?",
-            "Games make everything better! Let's play!"
+            "Games make everything better! Let's play!",
+            "labuubuulabuubuu"
         ]
 
         self.game_denied_comments = [
@@ -1277,9 +1302,22 @@ class DesktopPet(QWidget):
         # Creating popup windows was interfering with dragging functionality
         mood_prefix = "FRIENDLY" if self.annoyance_level == 0 else "EVIL"
         print(f"{mood_prefix} Pet says: {message}")
+        
+        # Speak the message if voice system is available
+        if self.voice_system and self.voice_system.is_voice_available():
+            self.voice_system.speak_async(message)
 
         self.last_comment_time = time.time()
         # Don't automatically increase annoyance level - only increase when provoked
+    
+    def speak_labubu_phrase(self):
+        """Make Labubu speak one of its signature phrases"""
+        if self.voice_system and self.voice_system.is_voice_available():
+            phrase = self.voice_system.speak_labubu_phrase()
+            mood_prefix = "FRIENDLY" if self.annoyance_level == 0 else "EVIL"
+            print(f"{mood_prefix} Labubu says: {phrase}")
+            return phrase
+        return None
         
     def update_position(self):
         """Update pet position with annoying assistant behavior"""
@@ -1302,6 +1340,7 @@ class DesktopPet(QWidget):
         self.behavior_timer += 1
         self.blink_timer += 1
         self.walk_cycle += 1
+        self.voice_timer += 1
         current_time = time.time()
         
         # Update game system
@@ -1317,6 +1356,13 @@ class DesktopPet(QWidget):
             self.game_craving > 1 and  # VERY low threshold (was 2, now 1)
             random.random() < 0.03):  # ULTRA high chance per frame (was 0.01 = 1%, now 3%!)
             self.request_game()
+        
+        # Random Labubu voice lines
+        if self.voice_system and self.voice_system.is_voice_available():
+            if self.voice_timer >= self.voice_interval:
+                self.speak_labubu_phrase()
+                self.voice_timer = 0
+                self.voice_interval = random.randint(300, 600)  # 5-10 seconds between voice lines
         
         # Handle blinking animation
         if self.blink_timer > 120:  # Blink every 2 seconds
@@ -1736,6 +1782,10 @@ class DesktopPet(QWidget):
                 # Deny game request
                 print("Denying game request!")
                 self.deny_game_request()
+        elif event.key() == Qt.Key_L:
+            # Press L to make Labubu speak
+            print("Triggering Labubu voice!")
+            self.speak_labubu_phrase()
         
         super().keyPressEvent(event)
 
@@ -1794,7 +1844,13 @@ def main():
     print("  * WIN the games to keep it calm!")
     print("  * LOSE games at your own risk!")
     print("- Denying games makes it more annoying!")
+    print("- Press L to make Labubu speak its signature phrases!")
     print("- Press Ctrl+C to make it go away")
+    print("")
+    print("Voice Setup:")
+    print("- Set ELEVENLABS_API_KEY environment variable to enable voice")
+    print("- Labubu will randomly speak: 'labu-labu', 'labuubuulabuubuu', 'six seven', 'forty-one'")
+    print("- Get free API key at: https://elevenlabs.io")
     print("")
     if IS_WINDOWS and not WINDOWS_AVAILABLE:
         print("Install pywin32 for FULL EVIL FUNCTIONALITY on Windows!")
