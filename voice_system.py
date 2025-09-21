@@ -17,9 +17,10 @@ try:
 except ImportError:
     DOTENV_AVAILABLE = False
 
-# Try to import ElevenLabs
+# Try to import ElevenLabs (new SDK)
 try:
-    from elevenlabs import generate, save, set_api_key, Voice, VoiceSettings
+    from elevenlabs.client import ElevenLabs
+    from elevenlabs import play
     ELEVENLABS_AVAILABLE = True
 except ImportError:
     print("ElevenLabs not available - voice features disabled")
@@ -32,7 +33,8 @@ class LabubuVoice:
         self.voice_enabled = False
         self.voice_queue = []
         self.is_speaking = False
-        
+        self.client = None
+
         # Initialize pygame mixer for audio playback
         try:
             pygame.mixer.init()
@@ -40,33 +42,22 @@ class LabubuVoice:
         except:
             print("Pygame mixer not available - voice disabled")
             self.audio_available = False
-        
+
         # Set up ElevenLabs if API key is available and ElevenLabs is installed
         if ELEVENLABS_AVAILABLE and self.api_key and self.audio_available:
             try:
-                set_api_key(self.api_key)
+                # Initialize ElevenLabs client (new SDK)
+                self.client = ElevenLabs(api_key=self.api_key)
                 self.voice_enabled = True
-                print("Labubu voice system initialized! 🎤")
-                
+                print("Labubu voice system initialized!")
+
                 # Get voice ID from .env file if available
-                voice_id = os.getenv('ELEVENLABS_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL')  # Default to Bella
-                
-                # Voice settings for Labubu (cute, playful voice)
-                self.voice_settings = VoiceSettings(
-                    stability=0.5,
-                    similarity_boost=0.8,
-                    style=0.3,
-                    use_speaker_boost=True
-                )
-                
-                # Use the voice ID from .env or default
-                self.voice = Voice(
-                    voice_id=voice_id,
-                    settings=self.voice_settings
-                )
-                
-                print(f"Using voice ID: {voice_id}")
-                
+                self.voice_id = os.getenv('ELEVENLABS_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL')  # Default to Bella
+                self.model_id = os.getenv('ELEVENLABS_MODEL_ID', 'eleven_multilingual_v2')  # Default model
+
+                print(f"Using voice ID: {self.voice_id}")
+                print(f"Using model: {self.model_id}")
+
             except Exception as e:
                 print(f"Failed to initialize ElevenLabs: {e}")
                 self.voice_enabled = False
@@ -85,20 +76,20 @@ class LabubuVoice:
             "forty-one"
         ]
         
-        # Voice settings will be set above if ElevenLabs is available and API key is valid
+        # Voice settings cleanup for old implementation
         if not self.voice_enabled:
-            self.voice_settings = None
-            self.voice = None
+            self.client = None
         
     def set_api_key(self, api_key):
         """Set ElevenLabs API key"""
         if not ELEVENLABS_AVAILABLE:
             print("ElevenLabs not available")
             return
-            
+
         self.api_key = api_key
         try:
-            set_api_key(self.api_key)
+            # Initialize client with new API key
+            self.client = ElevenLabs(api_key=self.api_key)
             self.voice_enabled = True
             print("ElevenLabs API key set successfully!")
         except Exception as e:
@@ -126,58 +117,76 @@ class LabubuVoice:
     
     def speak_immediate(self, text):
         """Speak text immediately (blocking)"""
-        if not ELEVENLABS_AVAILABLE or not self.voice_enabled or not self.audio_available:
+        if not ELEVENLABS_AVAILABLE or not self.voice_enabled or not self.audio_available or not self.client:
             return
-        
+
         try:
-            # Generate speech
-            audio = generate(
+            # Generate speech using new SDK
+            audio = self.client.text_to_speech.convert(
                 text=text,
-                voice=self.voice,
-                model="eleven_monolingual_v1"
+                voice_id=self.voice_id,
+                model_id=self.model_id,
+                output_format="mp3_44100_128"
             )
-            
+
             # Save to temporary file
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
-                save(audio, temp_file.name)
-                
-                # Play audio
-                self._play_audio_file(temp_file.name)
-                
-                # Clean up
-                os.unlink(temp_file.name)
-                
+                temp_file_name = temp_file.name
+
+            # Write audio bytes to file
+            with open(temp_file_name, 'wb') as f:
+                for chunk in audio:
+                    f.write(chunk)
+
+            # Play audio
+            self._play_audio_file(temp_file_name)
+
+            # Clean up
+            try:
+                os.unlink(temp_file_name)
+            except:
+                pass  # Ignore cleanup errors
+
         except Exception as e:
             print(f"Voice generation failed: {e}")
     
     def _voice_worker(self):
         """Background worker for voice queue"""
         self.is_speaking = True
-        
-        while self.voice_queue and self.voice_enabled and ELEVENLABS_AVAILABLE:
+
+        while self.voice_queue and self.voice_enabled and ELEVENLABS_AVAILABLE and self.client:
             text = self.voice_queue.pop(0)
-            
+
             try:
-                # Generate speech
-                audio = generate(
+                # Generate speech using new SDK
+                audio = self.client.text_to_speech.convert(
                     text=text,
-                    voice=self.voice,
-                    model="eleven_monolingual_v1"
+                    voice_id=self.voice_id,
+                    model_id=self.model_id,
+                    output_format="mp3_44100_128"
                 )
-                
+
                 # Save to temporary file
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
-                    save(audio, temp_file.name)
-                    
-                    # Play audio
-                    self._play_audio_file(temp_file.name)
-                    
-                    # Clean up
-                    os.unlink(temp_file.name)
-                    
+                    temp_file_name = temp_file.name
+
+                # Write audio bytes to file
+                with open(temp_file_name, 'wb') as f:
+                    for chunk in audio:
+                        f.write(chunk)
+
+                # Play audio
+                self._play_audio_file(temp_file_name)
+
+                # Clean up
+                try:
+                    os.unlink(temp_file_name)
+                except:
+                    pass  # Ignore cleanup errors
+
             except Exception as e:
                 print(f"Voice generation failed for '{text}': {e}")
-        
+
         self.is_speaking = False
     
     def _play_audio_file(self, file_path):

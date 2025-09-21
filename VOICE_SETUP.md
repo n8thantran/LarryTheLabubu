@@ -78,11 +78,33 @@ Labubu will randomly speak:
 # 1. Set API key
 export ELEVENLABS_API_KEY=sk_1234567890abcdef...
 
-# 2. Test voice
+# 2. Install dependencies (if not already installed)
+pip install elevenlabs pygame python-dotenv
+
+# 3. Test voice (new updated test)
 python test_elevenlabs.py
 
-# 3. Run Labubu
+# 4. Run Labubu
 python desktop_pet.py
+```
+
+## Optional: Custom Voice & Model Settings
+
+You can customize Labubu's voice by setting these environment variables:
+
+```bash
+# Optional: Custom voice ID (default is Bella)
+export ELEVENLABS_VOICE_ID=your_voice_id_here
+
+# Optional: Custom model (default is eleven_multilingual_v2)
+export ELEVENLABS_MODEL_ID=eleven_monolingual_v1
+```
+
+Or add them to a `.env` file in the project directory:
+```
+ELEVENLABS_API_KEY=your_api_key_here
+ELEVENLABS_VOICE_ID=your_voice_id_here
+ELEVENLABS_MODEL_ID=eleven_multilingual_v2
 ```
 
 Enjoy your talking Labubu! 🎤✨

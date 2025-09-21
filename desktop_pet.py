@@ -151,7 +151,7 @@ class DesktopPet(QWidget):
         if VOICE_AVAILABLE:
             try:
                 self.voice_system = LabubuVoice()
-                print("Labubu voice system loaded! 🎤")
+                print("Labubu voice system loaded!")
             except Exception as e:
                 print(f"Failed to initialize voice system: {e}")
                 self.voice_system = None
@@ -236,7 +236,7 @@ class DesktopPet(QWidget):
         
         # NEW: Game victory celebration comments  
         self.game_victory_comments = [
-            "Yay! You won! I'm so proud! 🎉",
+            "Yay! You won! I'm so proud!",
             "Great job! Maybe I'll be nice for a while...",
             "Victory! That was actually impressive!",
             "You did it! I'm feeling generous today!",
@@ -244,7 +244,7 @@ class DesktopPet(QWidget):
             "Excellent! That game victory earned you some peace!",
             "Amazing! You actually didn't fail this time!",
             "Success! I'm feeling much calmer now...",
-            "Well done! That victory makes me happy! 😊",
+            "Well done! That victory makes me happy!",
             "You won! Time for me to be a good pet!",
             "Victory achieved! Chaos mode deactivated!",
             "Great gaming! I'll give you a break from my antics!"
@@ -265,7 +265,7 @@ class DesktopPet(QWidget):
         self.position_randomly()
         
         # Announce manual game trigger availability
-        self.show_comment("🎮 Manual game triggers ready! Press I, O, G for requests or P for instant games!")
+        self.show_comment("Manual game triggers ready! Press I, O, G for requests or P for instant games!")
         
         # Start animation timer
         self.timer = QTimer(self)
@@ -741,7 +741,7 @@ class DesktopPet(QWidget):
         return browser_windows
 
     def evil_mouse_close_window(self):
-        """Take control of mouse and physically click close buttons! 😈"""
+        """Take control of mouse and physically click close buttons!"""
         if not (WINDOWS_AVAILABLE or MAC_AVAILABLE) or self.is_controlling_mouse:
             return False
             
@@ -893,7 +893,7 @@ class DesktopPet(QWidget):
         ]
         
         comment = random.choice(manual_comments)
-        self.show_comment(f"🎮 {comment} (Press Y to accept, N to deny)")
+        self.show_comment(f"{comment} (Press Y to accept, N to deny)")
         
         # Ensure focus for keyboard input
         self.setFocus()
@@ -1201,7 +1201,7 @@ class DesktopPet(QWidget):
         self.is_grabbing_cursor = True
         self.cursor_grab_timer = 0
         self.mood = "mischievous"
-        self.show_comment("Time to grab your cursor! 🖱️😈")
+        self.show_comment("Time to grab your cursor!")
 
     def cursor_grab_behavior(self):
         """Execute cursor grabbing behavior - move towards cursor, then drag it to top"""
@@ -1230,7 +1230,7 @@ class DesktopPet(QWidget):
         # Phase 2: Grab cursor and drag it to top (frames 61-180)
         elif self.cursor_grab_timer <= 180:
             if self.cursor_grab_timer == 61:
-                self.show_comment("Got your cursor! Taking it to the top! 😈")
+                self.show_comment("Got your cursor! Taking it to the top!")
 
             # Calculate progress for dragging cursor to top of screen
             progress = (self.cursor_grab_timer - 60) / 120.0  # 0 to 1
@@ -1271,9 +1271,9 @@ class DesktopPet(QWidget):
                             close_y = rect[1] + 15
 
                         self.move_mouse_to(close_x, close_y)
-                        self.show_comment(f"Closing '{target_window['title']}'! 💀")
+                        self.show_comment(f"Closing '{target_window['title']}'!")
                     else:
-                        self.show_comment("No windows at the top to close! 🙄")
+                        self.show_comment("No windows at the top to close!")
 
             elif self.cursor_grab_timer == 190:
                 # Click to close the window
@@ -1285,7 +1285,7 @@ class DesktopPet(QWidget):
             self.cursor_grab_target = None
             self.cursor_grab_timer = 0
             self.mood = "annoying"
-            self.show_comment("Haha! I controlled your cursor! 🖱️😈")
+            self.show_comment("Haha! I controlled your cursor!")
             # Move pet away
             self.velocity_x = random.uniform(-3, 3)
             self.velocity_y = random.uniform(-2, 2)
@@ -1758,14 +1758,14 @@ class DesktopPet(QWidget):
         # INSTANT GAME LAUNCH - Press P to immediately launch a random game (bypass request)
         if event.key() == Qt.Key_P:
             print("Instant game launch activated! (P pressed)")
-            self.show_comment("🎮 INSTANT GAME LAUNCH! No questions asked!")
+            self.show_comment("INSTANT GAME LAUNCH! No questions asked!")
             self.launch_random_game()
             super().keyPressEvent(event)
             return
         
         # HELP - Press H to show keyboard shortcuts
         if event.key() == Qt.Key_H:
-            help_message = "🎮 KEYBOARD SHORTCUTS: I/O/G = Request Game | P = Instant Game | Y = Accept | N = Deny | H = Help"
+            help_message = "KEYBOARD SHORTCUTS: I/O/G = Request Game | P = Instant Game | Y = Accept | N = Deny | H = Help"
             self.show_comment(help_message)
             super().keyPressEvent(event)
             return
@@ -1809,9 +1809,9 @@ def main():
     pet = DesktopPet()
     pet.show()
     
-    print("🎮 GAME-BASED CHAOS PET IS NOW ACTIVE! 🎮")
+    print("GAME-BASED CHAOS PET IS NOW ACTIVE!")
     print("")
-    print("⚠️ EXTREME WARNING: This pet PUNISHES game failures! ⚠️")
+    print("EXTREME WARNING: This pet PUNISHES game failures!")
     print("- Walk around your desktop like a real pet")
     print("- Make random annoying comments")
     print("- PHYSICALLY CONTROL YOUR MOUSE CURSOR!")
@@ -1820,7 +1820,7 @@ def main():
     print("- Get MORE evil the longer it runs")
     print("- Eventually hijack your mouse from anywhere!")
     print("")
-    print("🎯 ULTRA-FREQUENT GAME MECHANICS:")
+    print("ULTRA-FREQUENT GAME MECHANICS:")
     print("- Games pop up EVERY 10-15 SECONDS!")
     print("- WINNING games makes the pet calm and happy!")
     print("- FAILING games triggers PUNISHMENT MODE!")
@@ -1831,10 +1831,10 @@ def main():
     print("- Punishment level increases with each failure!")
     print("- Get ready for CONSTANT game requests!")
     print("")
-    print("🎮 Controls:")
+    print("Controls:")
     print("- Click and drag to move (it will complain!)")
     print("- Double-click to make it EXTRA evil")
-    print("- 🆕 MANUAL GAME TRIGGERS:")
+    print("- MANUAL GAME TRIGGERS:")
     print("  * Press I, O, or G to instantly request games!")
     print("  * Press P to immediately launch a game (no request)!")
     print("  * Press H for keyboard shortcut help!")
