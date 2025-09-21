@@ -265,7 +265,7 @@ class DesktopPet(QWidget):
         self.position_randomly()
         
         # Announce manual game trigger availability
-        self.show_comment("Manual game triggers ready! Press I, O, G for requests or P for instant games!")
+        self.show_comment("Manual game triggers ready! Press I, O, G for requests, P for instant random, or Ctrl+1/2/3 for specific games!")
         
         # Start animation timer
         self.timer = QTimer(self)
@@ -914,6 +914,36 @@ class DesktopPet(QWidget):
         else:
             self.show_comment("No games available... that's sad!")
             return False
+
+    def launch_specific_game(self, game_name):
+        """Launch a specific game by name"""
+        print(f"Attempting to launch specific game: {game_name}")
+
+        # Find the game class by name
+        target_game_class = None
+        for game_class in self.game_manager.available_games:
+            try:
+                # Create temporary instance to check name
+                temp_game = game_class()
+                if temp_game.game_name == game_name:
+                    target_game_class = game_class
+                    temp_game.deleteLater()
+                    break
+                temp_game.deleteLater()
+            except Exception as e:
+                print(f"Error checking game {game_class.__name__}: {e}")
+
+        if target_game_class:
+            game = self.game_manager.launch_game(target_game_class)
+            if game:
+                self.wants_to_play = False
+                self.game_craving = max(0, self.game_craving - 5)
+                self.mood = "happy"
+                self.show_comment(f"Launching {game_name} by your request!")
+                return True
+
+        self.show_comment(f"Sorry, couldn't find or launch {game_name}!")
+        return False
     
     def deny_game_request(self):
         """Handle when a game request is denied"""
@@ -1346,15 +1376,15 @@ class DesktopPet(QWidget):
         # Update game system
         self.game_manager.update()
         
-        # Build up game craving over time (ULTRA FREQUENT - 10-15 second target!)
+        # Build up game craving over time (ULTRA FREQUENT - 5-8 second target!)
         if not self.game_manager.is_game_running():
-            self.game_craving += 0.15  # ULTRA fast buildup (was 0.05, now 3x faster!)
-            
-        # Request games based on craving and mood (EVERY 10-15 SECONDS!)
-        if (not self.wants_to_play and 
+            self.game_craving += 0.25  # MAXIMUM fast buildup (was 0.15, now 5x faster than original!)
+
+        # Request games based on craving and mood (EVERY 5-8 SECONDS!)
+        if (not self.wants_to_play and
             not self.game_manager.is_game_running() and
-            self.game_craving > 1 and  # VERY low threshold (was 2, now 1)
-            random.random() < 0.03):  # ULTRA high chance per frame (was 0.01 = 1%, now 3%!)
+            self.game_craving > 0.5 and  # EXTREMELY low threshold (was 1, now 0.5)
+            random.random() < 0.08):  # MAXIMUM chance per frame (was 0.03 = 3%, now 8%!)
             self.request_game()
         
         # Random Labubu voice lines
@@ -1436,15 +1466,15 @@ class DesktopPet(QWidget):
         
         # Only get annoying when annoyance level is high or really craving games (ULTRA FREQUENT GAME REQUESTS!)
         if total_annoyance < 1 and self.game_craving < 1 and failure_factor == 0:  # Even lower threshold
-            weights = [0.3, 0.15, 0.0, 0.0, 0.0, 0.0, 0.55]  # ULTRA game requests (55%!)
+            weights = [0.25, 0.1, 0.05, 0.0, 0.05, 0.1, 0.45]  # MORE chaos, still high game requests (45%!)
         elif total_annoyance < 3 and failure_factor <= 1:
-            weights = [0.2, 0.1, 0.1, 0.05, 0.0, 0.05, 0.5]  # MASSIVE game requests (50%!)
+            weights = [0.15, 0.05, 0.15, 0.1, 0.1, 0.15, 0.3]  # Much more chaos and browser hunting!
         elif total_annoyance < 8 and failure_factor <= 2:
-            weights = [0.15, 0.07, 0.1, 0.1, 0.08, 0.1, 0.4]  # High game requests (40%!)
+            weights = [0.1, 0.03, 0.2, 0.15, 0.15, 0.25, 0.12]  # MAXIMUM browser hunting and chaos!
         elif failure_factor >= 3:  # MAXIMUM PUNISHMENT MODE
-            weights = [0.05, 0.02, 0.25, 0.4, 0.13, 0.15, 0.0]  # Heavy focus on chaos when many failures
+            weights = [0.03, 0.01, 0.3, 0.35, 0.16, 0.25, 0.0]  # EXTREME chaos and browser hunting
         else:
-            weights = [0.1, 0.05, 0.2, 0.3, 0.15, 0.2, 0.0]  # No more game requests when highly annoyed, just chaos
+            weights = [0.05, 0.02, 0.25, 0.35, 0.18, 0.25, 0.0]  # MAXIMUM chaos mode - no games, just mayhem!
         
         self.behavior_state = random.choices(behaviors, weights=weights)[0]
         self.behavior_timer = 0
@@ -1472,7 +1502,7 @@ class DesktopPet(QWidget):
             self.eye_state = "mischievous"
             self.start_cursor_stalking()
         elif self.behavior_state == "browser_hunting":
-            self.behavior_duration = random.randint(600, 900)  # Long browser hunting sessions
+            self.behavior_duration = random.randint(400, 700)  # Shorter but more frequent browser hunting sessions
             self.mood = "mischievous"
             self.eye_state = "mischievous"
             self.start_browser_hunt()
@@ -1624,8 +1654,8 @@ class DesktopPet(QWidget):
             
             self.top_right_visits += 1
             
-            # Take control of mouse and close a window!
-            if random.random() < 0.05 and not self.is_controlling_mouse:  # 5% chance per frame in danger zone
+            # Take control of mouse and close a window! (MUCH MORE FREQUENT!)
+            if random.random() < 0.15 and not self.is_controlling_mouse:  # 15% chance per frame in danger zone (was 5%!)
                 if self.evil_mouse_close_window():
                     self.mood = "annoying"
                     # Move away after causing chaos
@@ -1747,6 +1777,24 @@ class DesktopPet(QWidget):
             self.activateWindow()
             self.raise_()
         
+        # SPECIFIC GAME TRIGGERS - Ctrl+1,2,3 for specific games!
+        if event.modifiers() & Qt.ControlModifier:
+            if event.key() == Qt.Key_1:
+                print("Ctrl+1: Launching Matcha Whisking Game!")
+                self.launch_specific_game("Matcha Whisking")
+                super().keyPressEvent(event)
+                return
+            elif event.key() == Qt.Key_2:
+                print("Ctrl+2: Launching Hand Alternator Game!")
+                self.launch_specific_game("Hand Alternator Game")
+                super().keyPressEvent(event)
+                return
+            elif event.key() == Qt.Key_3:
+                print("Ctrl+3: Launching Impossible Click Game!")
+                self.launch_specific_game("Click the Labubu!")
+                super().keyPressEvent(event)
+                return
+
         # MANUAL GAME TRIGGERS - Press I, O, or G to instantly request games!
         if event.key() in [Qt.Key_I, Qt.Key_O, Qt.Key_G]:
             key_name = event.text().upper() if event.text() else "SPECIAL_KEY"
@@ -1754,7 +1802,7 @@ class DesktopPet(QWidget):
             self.manual_request_game()
             super().keyPressEvent(event)
             return
-        
+
         # INSTANT GAME LAUNCH - Press P to immediately launch a random game (bypass request)
         if event.key() == Qt.Key_P:
             print("Instant game launch activated! (P pressed)")
@@ -1765,7 +1813,7 @@ class DesktopPet(QWidget):
         
         # HELP - Press H to show keyboard shortcuts
         if event.key() == Qt.Key_H:
-            help_message = "KEYBOARD SHORTCUTS: I/O/G = Request Game | P = Instant Game | Y = Accept | N = Deny | H = Help"
+            help_message = "SHORTCUTS: I/O/G = Request | P = Random | Ctrl+1/2/3 = Specific Games | Y/N = Accept/Deny"
             self.show_comment(help_message)
             super().keyPressEvent(event)
             return
@@ -1821,7 +1869,8 @@ def main():
     print("- Eventually hijack your mouse from anywhere!")
     print("")
     print("ULTRA-FREQUENT GAME MECHANICS:")
-    print("- Games pop up EVERY 10-15 SECONDS!")
+    print("- Games pop up EVERY 5-8 SECONDS!")
+    print("- MUCH MORE browser hunting and window closing!")
     print("- WINNING games makes the pet calm and happy!")
     print("- FAILING games triggers PUNISHMENT MODE!")
     print("- Multiple failures = MAXIMUM CHAOS!")
@@ -1829,14 +1878,17 @@ def main():
     print("- The pet NEVER closes regardless of wins/losses!")
     print("- Game failures cause immediate window closing!")
     print("- Punishment level increases with each failure!")
-    print("- Get ready for CONSTANT game requests!")
+    print("- Get ready for CONSTANT game requests and chaos!")
     print("")
     print("Controls:")
     print("- Click and drag to move (it will complain!)")
     print("- Double-click to make it EXTRA evil")
     print("- MANUAL GAME TRIGGERS:")
     print("  * Press I, O, or G to instantly request games!")
-    print("  * Press P to immediately launch a game (no request)!")
+    print("  * Press P to immediately launch a random game (no request)!")
+    print("  * Press Ctrl+1 for Matcha Whisking Game!")
+    print("  * Press Ctrl+2 for Hand Alternator Game!")
+    print("  * Press Ctrl+3 for Impossible Click Game!")
     print("  * Press H for keyboard shortcut help!")
     print("- When it asks to play games:")
     print("  * Press Y to accept, N to deny (make sure pet window has focus)")
